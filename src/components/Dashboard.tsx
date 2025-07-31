@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, orderBy } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
-import { auth, db } from '../lib/firebase';
+import { auth } from '../lib/firebase';
+import { JobService } from '../lib/jobService';
 import { Job } from '../types/job';
 import Layout from './Layout';
-import JobCard from './JobCard';
-import JobForm from './JobForm';
+import JobsPage from './JobsPage';
+import AnalyticsPage from './AnalyticsPage';
 
 const Dashboard: React.FC = () => {
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [editingJob, setEditingJob] = useState<Job | null>(null);
+  const [currentPage, setCurrentPage] = useState<'jobs' | 'analytics'>('jobs');
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<string>('all');
 
   useEffect(() => {
     fetchJobs();
@@ -22,18 +20,7 @@ const Dashboard: React.FC = () => {
     if (!auth.currentUser) return;
 
     try {
-      const q = query(
-        collection(db, 'jobs'),
-        where('userId', '==', auth.currentUser.uid),
-        orderBy('createdAt', 'desc')
-      );
-      const querySnapshot = await getDocs(q);
-      const fetchedJobs: Job[] = [];
-      
-      querySnapshot.forEach((doc) => {
-        fetchedJobs.push({ id: doc.id, ...doc.data() } as Job);
-      });
-      
+      const fetchedJobs = await JobService.getJobsByUser(auth.currentUser.uid);
       setJobs(fetchedJobs);
     } catch (error) {
       console.error('Error fetching jobs:', error);
@@ -46,37 +33,30 @@ const Dashboard: React.FC = () => {
     if (!auth.currentUser) return;
 
     try {
-      const newJob = {
+      const newJobData = {
         ...jobData,
         userId: auth.currentUser.uid,
         events: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        appliedDate: jobData.appliedDate || new Date().toISOString()
       };
 
-      const docRef = await addDoc(collection(db, 'jobs'), newJob);
-      setJobs(prev => [{ id: docRef.id, ...newJob } as Job, ...prev]);
-      setShowForm(false);
+      const newJob = await JobService.createJob(newJobData);
+      setJobs(prev => [newJob, ...prev]);
     } catch (error) {
       console.error('Error adding job:', error);
     }
   };
 
   const handleEditJob = async (jobData: Partial<Job>) => {
-    if (!editingJob?.id) return;
+    if (!jobData.id) return;
 
     try {
-      const updatedJob = {
-        ...jobData,
-        updatedAt: new Date().toISOString()
-      };
-
-      await updateDoc(doc(db, 'jobs', editingJob.id), updatedJob);
+      const updatedJob = await JobService.updateJob(jobData.id, jobData);
+      if (!updatedJob) return;
+      
       setJobs(prev => prev.map(job => 
-        job.id === editingJob.id ? { ...job, ...updatedJob } : job
+        job.id === jobData.id ? updatedJob : job
       ));
-      setEditingJob(null);
-      setShowForm(false);
     } catch (error) {
       console.error('Error updating job:', error);
     }
@@ -86,7 +66,7 @@ const Dashboard: React.FC = () => {
     if (!confirm('Are you sure you want to delete this job?')) return;
 
     try {
-      await deleteDoc(doc(db, 'jobs', jobId));
+      await JobService.deleteJob(jobId);
       setJobs(prev => prev.filter(job => job.id !== jobId));
     } catch (error) {
       console.error('Error deleting job:', error);
@@ -101,19 +81,18 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const getStatusCounts = () => {
-    const counts = {
-      total: jobs.length,
-      applied: jobs.filter(j => j.status === 'applied').length,
-      interview: jobs.filter(j => j.status === 'interview').length,
-      offer: jobs.filter(j => j.status === 'offer').length,
-      rejected: jobs.filter(j => j.status === 'rejected').length
-    };
-    return counts;
+  const handleJobOrderUpdate = async (jobId: string, newOrder: number, newColumn: string) => {
+    try {
+      const updatedJob = await JobService.updateJobOrder(jobId, newOrder, newColumn);
+      if (updatedJob) {
+        setJobs(prev => prev.map(job => 
+          job.id === jobId ? updatedJob : job
+        ));
+      }
+    } catch (error) {
+      console.error('Error updating job order:', error);
+    }
   };
-
-  const filteredJobs = filter === 'all' ? jobs : jobs.filter(job => job.status === filter);
-  const statusCounts = getStatusCounts();
 
   if (loading) {
     return (
@@ -126,119 +105,22 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  if (showForm) {
-    return (
-      <Layout>
-        <JobForm
-          job={editingJob}
-          onSubmit={editingJob ? handleEditJob : handleAddJob}
-          onCancel={() => {
-            setShowForm(false);
-            setEditingJob(null);
-          }}
-        />
-      </Layout>
-    );
-  }
-
   return (
-    <Layout>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Job Applications</h1>
-          <p className="text-muted-foreground">Track and manage your job applications</p>
-        </div>
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={() => setShowForm(true)}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-hover transition-colors font-medium"
-          >
-            Add Job
-          </button>
-          <button
-            onClick={handleSignOut}
-            className="px-4 py-2 border border-border text-foreground rounded-lg hover:bg-muted transition-colors"
-          >
-            Sign Out
-          </button>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-        <div className="bg-card border border-border rounded-lg p-4">
-          <div className="text-2xl font-bold text-foreground">{statusCounts.total}</div>
-          <div className="text-sm text-muted-foreground">Total Applications</div>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <div className="text-2xl font-bold text-job-applied">{statusCounts.applied}</div>
-          <div className="text-sm text-muted-foreground">Applied</div>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <div className="text-2xl font-bold text-job-interview">{statusCounts.interview}</div>
-          <div className="text-sm text-muted-foreground">Interviews</div>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <div className="text-2xl font-bold text-job-offer">{statusCounts.offer}</div>
-          <div className="text-sm text-muted-foreground">Offers</div>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <div className="text-2xl font-bold text-job-rejected">{statusCounts.rejected}</div>
-          <div className="text-sm text-muted-foreground">Rejected</div>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center space-x-2 mb-6">
-        <span className="text-sm font-medium text-foreground">Filter:</span>
-        {['all', 'applied', 'interview', 'offer', 'rejected', 'pending'].map((status) => (
-          <button
-            key={status}
-            onClick={() => setFilter(status)}
-            className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-              filter === status
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-secondary text-secondary-foreground hover:bg-muted'
-            }`}
-          >
-            {status.charAt(0).toUpperCase() + status.slice(1)}
-          </button>
-        ))}
-      </div>
-
-      {/* Jobs Grid */}
-      {filteredJobs.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-4xl mb-4">📋</div>
-          <h3 className="text-lg font-medium text-foreground mb-2">No jobs found</h3>
-          <p className="text-muted-foreground mb-4">
-            {filter === 'all' 
-              ? "Start tracking your job applications by adding your first job."
-              : `No jobs found with status "${filter}".`
-            }
-          </p>
-          <button
-            onClick={() => setShowForm(true)}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-hover transition-colors font-medium"
-          >
-            Add Your First Job
-          </button>
-        </div>
+    <Layout 
+      currentPage={currentPage} 
+      onPageChange={setCurrentPage}
+      onSignOut={handleSignOut}
+    >
+      {currentPage === 'jobs' ? (
+        <JobsPage 
+          jobs={jobs}
+          onAddJob={handleAddJob}
+          onEditJob={handleEditJob}
+          onDeleteJob={handleDeleteJob}
+          onJobOrderUpdate={handleJobOrderUpdate}
+        />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredJobs.map((job) => (
-            <JobCard
-              key={job.id}
-              job={job}
-              onEdit={(job) => {
-                setEditingJob(job);
-                setShowForm(true);
-              }}
-              onDelete={handleDeleteJob}
-            />
-          ))}
-        </div>
+        <AnalyticsPage jobs={jobs} />
       )}
     </Layout>
   );

@@ -5,6 +5,7 @@ interface JobCardProps {
   job: Job;
   onEdit?: (job: Job) => void;
   onDelete?: (jobId: string) => void;
+  compact?: boolean;
 }
 
 const statusColors = {
@@ -15,7 +16,7 @@ const statusColors = {
   pending: 'bg-job-pending text-white'
 };
 
-const JobCard: React.FC<JobCardProps> = ({ job, onEdit, onDelete }) => {
+const JobCard: React.FC<JobCardProps> = ({ job, onEdit, onDelete, compact = false }) => {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
@@ -25,43 +26,62 @@ const JobCard: React.FC<JobCardProps> = ({ job, onEdit, onDelete }) => {
   };
 
   return (
-    <div className="bg-card border border-border rounded-lg p-6 hover:shadow-md transition-shadow">
+    <div className={`bg-card border border-border rounded-lg hover:shadow-md transition-shadow ${
+      compact ? 'p-4' : 'p-6'
+    }`}>
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
-          <h3 className="text-lg font-semibold text-foreground mb-1">{job.position}</h3>
-          <p className="text-muted-foreground font-medium">{job.company}</p>
+          <h3 className={`font-semibold text-foreground mb-1 ${
+            compact ? 'text-sm' : 'text-lg'
+          }`}>{job.position}</h3>
+          <p className={`text-muted-foreground font-medium ${
+            compact ? 'text-xs' : 'text-sm'
+          }`}>{job.company}</p>
           {job.location && (
-            <p className="text-sm text-muted-foreground mt-1">{job.location}</p>
+            <p className={`text-muted-foreground mt-1 ${
+              compact ? 'text-xs' : 'text-sm'
+            }`}>{job.location}</p>
           )}
         </div>
-        <div className="flex items-center space-x-2">
-          <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[job.status]}`}>
-            {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
-          </span>
-          <div className="relative">
-            <button className="p-1 text-muted-foreground hover:text-foreground transition-colors">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-              </svg>
-            </button>
+        {!compact && (
+          <div className="flex items-center space-x-2">
+            <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[job.status]}`}>
+              {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+            </span>
           </div>
-        </div>
+        )}
       </div>
 
+      {compact && (
+        <div className="mb-3">
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[job.status]}`}>
+            {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+          </span>
+        </div>
+      )}
+
       <div className="space-y-2 mb-4">
-        <div className="flex items-center justify-between text-sm">
+        <div className={`flex items-center justify-between ${
+          compact ? 'text-xs' : 'text-sm'
+        }`}>
           <span className="text-muted-foreground">Applied:</span>
           <span className="text-foreground font-medium">{formatDate(job.appliedDate)}</span>
         </div>
         {job.salary && (
-          <div className="flex items-center justify-between text-sm">
+          <div className={`flex items-center justify-between ${
+            compact ? 'text-xs' : 'text-sm'
+          }`}>
             <span className="text-muted-foreground">Salary:</span>
             <span className="text-foreground font-medium">{job.salary}</span>
           </div>
         )}
-        <div className="flex items-center justify-between text-sm">
+        <div className={`flex items-center justify-between ${
+          compact ? 'text-xs' : 'text-sm'
+        }`}>
           <span className="text-muted-foreground">Source:</span>
-          <span className={`text-xs px-2 py-1 rounded ${job.source === 'extension' ? 'bg-primary/10 text-primary' : 'bg-secondary text-secondary-foreground'}`}>
+          <span className={`px-2 py-1 rounded ${
+            compact ? 'text-xs' : 'text-xs'
+          } ${job.source === 'extension' ? 'bg-primary/10 text-primary' : 'bg-secondary text-secondary-foreground'}`}>
             {job.source === 'extension' ? 'Extension' : 'Manual'}
           </span>
         </div>
@@ -69,11 +89,13 @@ const JobCard: React.FC<JobCardProps> = ({ job, onEdit, onDelete }) => {
 
       {job.notes && (
         <div className="mb-4">
-          <p className="text-sm text-muted-foreground line-clamp-2">{job.notes}</p>
+          <p className={`text-muted-foreground line-clamp-2 ${
+            compact ? 'text-xs' : 'text-sm'
+          }`}>{job.notes}</p>
         </div>
       )}
 
-      {job.events.length > 0 && (
+      {!compact && job.events.length > 0 && (
         <div className="mb-4">
           <h4 className="text-sm font-medium text-foreground mb-2">Recent Events</h4>
           <div className="space-y-1">
@@ -90,13 +112,17 @@ const JobCard: React.FC<JobCardProps> = ({ job, onEdit, onDelete }) => {
       <div className="flex items-center space-x-2 pt-4 border-t border-border">
         <button
           onClick={() => onEdit?.(job)}
-          className="flex-1 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/5 border border-border rounded-md transition-colors"
+          className={`flex-1 font-medium text-primary hover:bg-primary/5 border border-border rounded-md transition-colors ${
+            compact ? 'px-2 py-1 text-xs' : 'px-3 py-2 text-sm'
+          }`}
         >
           Edit
         </button>
         <button
           onClick={() => onDelete?.(job.id!)}
-          className="px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/5 border border-border rounded-md transition-colors"
+          className={`font-medium text-destructive hover:bg-destructive/5 border border-border rounded-md transition-colors ${
+            compact ? 'px-2 py-1 text-xs' : 'px-3 py-2 text-sm'
+          }`}
         >
           Delete
         </button>
@@ -105,7 +131,9 @@ const JobCard: React.FC<JobCardProps> = ({ job, onEdit, onDelete }) => {
             href={job.fromUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground border border-border rounded-md transition-colors"
+            className={`font-medium text-muted-foreground hover:text-foreground border border-border rounded-md transition-colors ${
+              compact ? 'px-2 py-1 text-xs' : 'px-3 py-2 text-sm'
+            }`}
           >
             View
           </a>

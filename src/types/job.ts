@@ -13,6 +13,8 @@ export interface Job {
   userId: string;
   createdAt: string;
   updatedAt: string;
+  order?: number;
+  column?: string;
 }
 
 export interface JobEvent {

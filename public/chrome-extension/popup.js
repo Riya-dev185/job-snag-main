@@ -15,7 +15,6 @@ class JobTrackerPopup {
     this.passwordInput = document.getElementById('password');
     this.loginBtn = document.getElementById('loginBtn');
     this.logoutBtn = document.getElementById('logoutBtn');
-    this.extractBtn = document.getElementById('extractBtn');
     this.saveBtn = document.getElementById('saveBtn');
     this.statusDiv = document.getElementById('status');
     
@@ -29,7 +28,6 @@ class JobTrackerPopup {
   attachEventListeners() {
     this.loginBtn.addEventListener('click', () => this.handleLogin());
     this.logoutBtn.addEventListener('click', () => this.handleLogout());
-    this.extractBtn.addEventListener('click', () => this.extractJobData());
     this.saveBtn.addEventListener('click', () => this.saveJobToCRM());
     
     // Enter key login
@@ -99,7 +97,6 @@ class JobTrackerPopup {
 
       this.showJobForm();
       this.showStatus('Successfully signed in!');
-      await this.extractJobData();
       
     } catch (error) {
       console.error('Login error:', error);
@@ -122,39 +119,6 @@ class JobTrackerPopup {
     this.locationInput.value = '';
     this.salaryInput.value = '';
     this.notesInput.value = '';
-  }
-
-  async extractJobData() {
-    this.extractBtn.disabled = true;
-    this.extractBtn.textContent = 'Extracting...';
-
-    try {
-      // Get current tab
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      
-      // Send message to content script to extract job data
-      const response = await chrome.tabs.sendMessage(tab.id, { action: 'extractJobData' });
-      
-      if (response && response.success) {
-        const data = response.data;
-        
-        // Populate form with extracted data
-        this.companyInput.value = data.company || '';
-        this.positionInput.value = data.position || '';
-        this.locationInput.value = data.location || '';
-        this.salaryInput.value = data.salary || '';
-        
-        this.showStatus('Job data extracted successfully!');
-      } else {
-        this.showStatus('Could not extract job data from this page', 'error');
-      }
-    } catch (error) {
-      console.error('Extraction error:', error);
-      this.showStatus('Failed to extract job data', 'error');
-    } finally {
-      this.extractBtn.disabled = false;
-      this.extractBtn.textContent = 'Extract Job Data';
-    }
   }
 
   async saveJobToCRM() {
@@ -185,14 +149,25 @@ class JobTrackerPopup {
         status: 'applied'
       };
 
-      // In a real implementation, you'd send this to your Firebase/API
+      // Send to MongoDB API
       console.log('Job data to save:', jobData);
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      this.showStatus('Job saved to CRM successfully!');
-      this.clearForm();
+      // Here you would make an actual API call to your MongoDB backend
+      const response = await fetch('http://localhost:8080/api/jobs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${result.authToken}`
+        },
+        body: JSON.stringify(jobData)
+      });
+
+      if (response.ok) {
+        this.showStatus('Job saved to CRM successfully!');
+        this.clearForm();
+      } else {
+        throw new Error('Failed to save job');
+      }
       
     } catch (error) {
       console.error('Save error:', error);
